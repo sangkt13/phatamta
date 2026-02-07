@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="IELTS Speaking AI + Pronunciation (Word-level) — Vercel Serverless" />
+  <title>IELTS Speaking Coach (AI + Pronunciation)</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Marked (Markdown -> HTML) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <!-- Inter font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  </style>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+  <div class="max-w-5xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
+          IELTS Speaking Coach
+        </h1>
+        <p class="text-slate-600 mt-1">
+          Band + Grammar/Vocab (AI) · Pronunciation từng từ (Word-level) bằng Pronunciation Assessment
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <span id="serverStatusDot" class="inline-block w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+        <span id="serverStatusText" class="text-sm text-slate-600">Chưa kiểm tra server</span>
+      </div>
+    </div>
+
+    <!-- Main grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+      <!-- Left: Controls -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+        <h2 class="text-lg font-bold text-slate-900">1) Chọn câu hỏi</h2>
+
+        <div class="mt-4">
+          <label class="text-sm font-semibold text-slate-700">Chủ đề</label>
+          <select id="topicSelect" class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2">
+          </select>
+        </div>
+
+        <div class="mt-4">
+          <label class="text-sm font-semibold text-slate-700">Câu hỏi</label>
+          <select id="questionSelect" class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2">
+          </select>
+        </div>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button id="btnRandom" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">
+            Random câu hỏi
+          </button>
+          <button id="btnGenerateModelAnswer" class="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500">
+            Tạo câu mẫu (AI)
+          </button>
+        </div>
+
+        <hr class="my-6 border-slate-200" />
+
+        <h2 class="text-lg font-bold text-slate-900">2) Ghi âm & nhận transcript</h2>
+        <p class="text-sm text-slate-600 mt-1">
+          Bạn có 2 chế độ:
+          <b>Speaking free</b> (nói tự do) để AI chấm band;
+          <b>Read Aloud</b> (đọc theo câu mẫu) để chấm phát âm từng từ.
+        </p>
+
+        <div class="mt-4">
+          <label class="text-sm font-semibold text-slate-700">Chọn model AI (band/feedback)</label>
+          <select id="modelSelect" class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2">
+            <option value="gpt-4o-mini">gpt-4o-mini (rẻ/nhanh)</option>
+            <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+          </select>
+          <p class="text-xs text-slate-500 mt-1">
+            (AI key nằm trên Vercel env, client không chứa key)
+          </p>
+        </div>
+
+        <div class="mt-5 flex flex-wrap gap-2">
+          <button id="btnStartRec" class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500">
+            Start Recording
+          </button>
+          <button id="btnStopRec" class="px-4 py-2 rounded-xl bg-rose-600 text-white hover:bg-rose-500">
+            Stop Recording
+          </button>
+          <button id="btnPlayRec" class="px-4 py-2 rounded-xl bg-slate-200 text-slate-900 hover:bg-slate-300">
+            Play
+          </button>
+        </div>
+
+        <div class="mt-3 flex items-center gap-2">
+          <span class="text-sm text-slate-700 font-semibold">Speech Recognition:</span>
+          <button id="btnStartSTT" class="px-3 py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-500 text-sm">
+            Start STT
+          </button>
+          <button id="btnStopSTT" class="px-3 py-1.5 rounded-xl bg-slate-200 text-slate-900 hover:bg-slate-300 text-sm">
+            Stop STT
+          </button>
+          <span id="sttStatus" class="text-xs text-slate-500">Idle</span>
+        </div>
+
+        <div class="mt-4">
+          <label class="text-sm font-semibold text-slate-700">Transcript (từ Speech Recognition)</label>
+          <textarea id="transcriptBox" rows="6" class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2"
+            placeholder="Bấm Start STT rồi nói..."></textarea>
+          <div class="flex flex-wrap gap-2 mt-2">
+            <button id="btnAnalyze" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">
+              AI chấm band + sửa lỗi
+            </button>
+            <button id="btnClearTranscript" class="px-4 py-2 rounded-xl bg-slate-200 text-slate-900 hover:bg-slate-300">
+              Xóa transcript
+            </button>
+          </div>
+        </div>
+
+        <hr class="my-6 border-slate-200" />
+
+        <h2 class="text-lg font-bold text-slate-900">3) Pronunciation (Word-level)</h2>
+        <p class="text-sm text-slate-600 mt-1">
+          Dán <b>câu mẫu</b> (reference text) và <b>đọc đúng y nguyên</b> → bấm “Check Pronunciation”.
+        </p>
+
+        <div class="mt-3">
+          <label class="text-sm font-semibold text-slate-700">Reference Text (câu mẫu để đọc theo)</label>
+          <textarea id="refTextBox" rows="4" class="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2"
+            placeholder="Ví dụ: Today I'd like to talk about..."></textarea>
+
+          <div class="flex flex-wrap gap-2 mt-2">
+            <button id="btnUseModelAnswerAsRef" class="px-4 py-2 rounded-xl bg-indigo-100 text-indigo-900 hover:bg-indigo-200">
+              Dùng câu mẫu AI làm reference
+            </button>
+            <button id="btnCheckPron" class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500">
+              Check Pronunciation (Word-level)
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-4 text-xs text-slate-500">
+          Nếu gặp lỗi “audio format”, hãy dùng Chrome/Edge và ghi âm lại. (File audio/webm; opus thường OK)
+        </div>
+      </div>
+
+      <!-- Right: Outputs -->
+      <div class="space-y-6">
+        <!-- Question + Model answer -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+          <h2 class="text-lg font-bold text-slate-900">Câu hỏi hiện tại</h2>
+          <div class="mt-2 p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="text-sm text-slate-500">Topic</div>
+            <div id="curTopic" class="font-semibold text-slate-900 mt-1"></div>
+            <div class="text-sm text-slate-500 mt-3">Question</div>
+            <div id="curQuestion" class="font-semibold text-slate-900 mt-1"></div>
+          </div>
+
+          <div class="mt-4">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-slate-900">Câu mẫu (AI)</h3>
+              <button id="btnCopyModelAnswer" class="text-sm px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300">
+                Copy
+              </button>
+            </div>
+            <div id="modelAnswerBox" class="mt-2 p-4 rounded-xl bg-white border border-slate-200 text-slate-800 whitespace-pre-wrap min-h-[90px]">
+              (Chưa có)
+            </div>
+          </div>
+        </div>
+
+        <!-- Pronunciation result -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-bold text-slate-900">Pronunciation (Word-level)</h2>
+            <button id="btnClearPron" class="text-sm px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300">
+              Clear
+            </button>
+          </div>
+
+          <div id="pronStatus" class="text-sm text-slate-500 mt-2">Chưa chấm</div>
+
+          <div id="pronSummary" class="mt-3 text-sm text-slate-700"></div>
+
+          <div class="mt-3">
+            <div class="text-sm font-semibold text-slate-700">Highlight theo reference text</div>
+            <div id="pronHighlight" class="mt-2 p-4 rounded-xl bg-slate-50 border border-slate-200 leading-8">
+              (Chưa có)
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <div class="text-sm font-semibold text-slate-700">Danh sách từ sai/nên sửa (top)</div>
+            <ul id="pronWrongList" class="mt-2 list-disc pl-6 text-sm text-slate-700">
+              <li>(Chưa có)</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- AI result -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-bold text-slate-900">AI Feedback (Band + Grammar/Vocab)</h2>
+            <button id="btnClearAI" class="text-sm px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300">
+              Clear
+            </button>
+          </div>
+          <div id="aiStatus" class="text-sm text-slate-500 mt-2">Chưa phân tích</div>
+          <div id="aiContent" class="prose prose-slate max-w-none mt-3">
+            <p class="text-slate-600">(Chưa có)</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="mt-8 text-xs text-slate-500">
+      Gợi ý: Deploy lên Vercel + tạo env vars: OPENAI_API_KEY, AZURE_SPEECH_KEY, AZURE_SPEECH_REGION.  
+      Client không lưu key.
+    </footer>
+  </div>
+
+  <audio id="player" controls class="hidden"></audio>
+
+  <script>
+    /******************************
+     * 0) Sample topics/questions
+     ******************************/
+    const TOPICS = [
+      {
+        title: "Daily Life",
+        questions: [
+          "What do you usually do on weekends?",
+          "Do you prefer mornings or evenings? Why?",
+          "What is your favorite hobby and how did you start?"
+        ]
+      },
+      {
+        title: "Work & Study",
+        questions: [
+          "What do you do? (work/study) Tell me about it.",
+          "What skills do you want to improve this year?",
+          "Do you prefer studying alone or with friends?"
+        ]
+      },
+      {
+        title: "Health & Lifestyle",
+        questions: [
+          "What do you do to stay healthy?",
+          "Do you think people today are healthier than in the past?",
+          "How has technology changed the way we live?"
+        ]
+      }
+    ];
+
+    /******************************
+     * 1) DOM helpers
+     ******************************/
+    const $ = (id) => document.getElementById(id);
+
+    function escapeHtml(s="") {
+      return s.replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+    }
+    function normalizeWord(s="") {
+      return s.toLowerCase().replace(/[^a-z']/g, "");
+    }
+    function setServerStatus(ok, text) {
+      $("serverStatusDot").className = "inline-block w-2.5 h-2.5 rounded-full " + (ok ? "bg-emerald-500" : "bg-rose-500");
+      $("serverStatusText").textContent = text;
+    }
+
+    /******************************
+     * 2) State
+     ******************************/
+    let currentTopicIndex = 0;
+    let currentQuestionIndex = 0;
+    let modelAnswerText = "";
+
+    // Recording
+    let mediaStream = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let lastAudioBlob = null;
+
+    // Speech Recognition
+    let recognition = null;
+    let recognizing = false;
+
+    /******************************
+     * 3) Init UI
+     ******************************/
+    function initTopicQuestionSelectors() {
+      // Topics
+      $("topicSelect").innerHTML = TOPICS.map((t, i) => `<option value="${i}">${escapeHtml(t.title)}</option>`).join("");
+      $("topicSelect").value = String(currentTopicIndex);
+
+      // Questions
+      refreshQuestionSelect();
+      renderCurrentQA();
+    }
+
+    function refreshQuestionSelect() {
+      const t = TOPICS[currentTopicIndex];
+      $("questionSelect").innerHTML = t.questions.map((q, i) => `<option value="${i}">${escapeHtml(q)}</option>`).join("");
+      $("questionSelect").value = String(currentQuestionIndex);
+    }
+
+    function renderCurrentQA() {
+      const topic = TOPICS[currentTopicIndex];
+      const question = topic.questions[currentQuestionIndex];
+      $("curTopic").textContent = topic.title;
+      $("curQuestion").textContent = question;
+    }
+
+    function randomQA() {
+      currentTopicIndex = Math.floor(Math.random() * TOPICS.length);
+      currentQuestionIndex = Math.floor(Math.random() * TOPICS[currentTopicIndex].questions.length);
+      $("topicSelect").value = String(currentTopicIndex);
+      refreshQuestionSelect();
+      renderCurrentQA();
+    }
+
+    /******************************
+     * 4) Recording (MediaRecorder)
+     ******************************/
+    async function startRecording() {
+      try {
+        recordedChunks = [];
+        lastAudioBlob = null;
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        const prefer = [
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/ogg;codecs=opus",
+          "audio/ogg"
+        ];
+        let mimeType = "";
+        for (const t of prefer) {
+          if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) { mimeType = t; break; }
+        }
+
+        mediaRecorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          lastAudioBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || "audio/webm;codecs=opus" });
+          if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+          mediaStream = null;
+        };
+
+        mediaRecorder.start();
+        $("pronStatus").textContent = "Đang ghi âm...";
+      } catch (e) {
+        $("pronStatus").textContent = "Không thể ghi âm: " + (e?.message || e);
+      }
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        $("pronStatus").textContent = "Đã dừng ghi âm. Có thể Play hoặc Check Pronunciation.";
+      }
+    }
+
+    function playRecording() {
+      if (!lastAudioBlob) return;
+      const url = URL.createObjectURL(lastAudioBlob);
+      const player = $("player");
+      player.src = url;
+      player.classList.remove("hidden");
+      player.play().catch(()=>{});
+    }
+
+    /******************************
+     * 5) Speech Recognition (Web Speech API)
+     ******************************/
+    function setupSpeechRecognition() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        $("sttStatus").textContent = "Trình duyệt không hỗ trợ STT (SpeechRecognition).";
+        return;
+      }
+      recognition = new SR();
+      recognition.lang = "en-US";
+      recognition.interimResults = true;
+      recognition.continuous = true;
+
+      recognition.onstart = () => {
+        recognizing = true;
+        $("sttStatus").textContent = "Listening...";
+      };
+
+      recognition.onerror = (e) => {
+        $("sttStatus").textContent = "STT error: " + (e?.error || "unknown");
+      };
+
+      recognition.onend = () => {
+        recognizing = false;
+        $("sttStatus").textContent = "Stopped";
+      };
+
+      recognition.onresult = (event) => {
+        let finalText = "";
+        let interimText = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          if (event.results[i].isFinal) finalText += t + " ";
+          else interimText += t + " ";
+        }
+        // Append final, show interim in-place
+        const box = $("transcriptBox");
+        const base = box.value.replace(/\s*\[interim\][\s\S]*$/, "").trim();
+        const newBase = (base + " " + finalText).trim();
+        box.value = newBase + (interimText.trim() ? `\n[interim] ${interimText.trim()}` : "");
+      };
+    }
+
+    function startSTT() {
+      if (!recognition) return;
+      if (!recognizing) {
+        try { recognition.start(); } catch(_) {}
+      }
+    }
+
+    function stopSTT() {
+      if (!recognition) return;
+      if (recognizing) recognition.stop();
+    }
+
+    function getCleanTranscript() {
+      return ($("transcriptBox").value || "").replace(/\s*\[interim\][\s\S]*$/, "").trim();
+    }
+
+    /******************************
+     * 6) OpenAI analysis via /api/analyze (serverless)
+     ******************************/
+    async function analyzeIELTS() {
+      const transcript = getCleanTranscript();
+      if (!transcript) {
+        $("aiStatus").textContent = "Thiếu transcript. Hãy nói và có transcript trước.";
+        return;
+      }
+
+      const topic = TOPICS[currentTopicIndex].title;
+      const question = TOPICS[currentTopicIndex].questions[currentQuestionIndex];
+      const model = $("modelSelect").value || "gpt-4o-mini";
+
+      $("aiStatus").textContent = "Đang phân tích...";
+      $("aiContent").innerHTML = `<p class="text-slate-600">Đang gọi AI...</p>`;
+
+      try {
+        const r = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ topic, question, transcript, model })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.error || "AI error");
+
+        const md = data.text || "";
+        $("aiContent").innerHTML = window.marked ? marked.parse(md) : `<pre class="whitespace-pre-wrap">${escapeHtml(md)}</pre>`;
+        $("aiStatus").textContent = "Đã phân tích xong.";
+      } catch (e) {
+        $("aiStatus").textContent = "Lỗi AI: " + (e?.message || e);
+        $("aiContent").innerHTML = `<p class="text-rose-600">Không gọi được /api/analyze. Kiểm tra Vercel env OPENAI_API_KEY và deploy lại.</p>`;
+      }
+    }
+
+    /******************************
+     * 7) Generate model answer via /api/analyze (reuse prompt)
+     *    (tạo câu mẫu bằng cách “đổi transcript thành prompt tạo mẫu”)
+     ******************************/
+    async function generateModelAnswer() {
+      const topic = TOPICS[currentTopicIndex].title;
+      const question = TOPICS[currentTopicIndex].questions[currentQuestionIndex];
+      const model = $("modelSelect").value || "gpt-4o-mini";
+
+      $("aiStatus").textContent = "Đang tạo câu mẫu...";
+      $("aiContent").innerHTML = `<p class="text-slate-600">Đang gọi AI tạo câu mẫu...</p>`;
+
+      const transcript = `Please write a natural IELTS Speaking answer (30-45 seconds) for this question. Use B2-C1 vocabulary. Output only the answer text.`;
+
+      try {
+        const r = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ topic, question, transcript, model })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.error || "AI error");
+
+        // Lấy text từ response markdown -> để đơn giản hiển thị nguyên
+        // Bạn có thể tinh chỉnh /api/analyze để có mode "model_answer" nếu muốn
+        const raw = (data.text || "").trim();
+
+        // Cố gắng trích “Better answer / sample” nếu có
+        let extracted = raw;
+        const m = raw.match(/Better answer[\s\S]*?:([\s\S]*)/i);
+        if (m && m[1]) extracted = m[1].trim();
+
+        modelAnswerText = extracted.replace(/^\s*[-*]\s*/gm, "").trim();
+        $("modelAnswerBox").textContent = modelAnswerText || "(Không trích được, xem AI Feedback)";
+        $("aiStatus").textContent = "Đã tạo câu mẫu. Bạn có thể dùng làm reference để chấm phát âm.";
+        $("aiContent").innerHTML = window.marked ? marked.parse(raw) : `<pre class="whitespace-pre-wrap">${escapeHtml(raw)}</pre>`;
+      } catch (e) {
+        $("aiStatus").textContent = "Lỗi tạo câu mẫu: " + (e?.message || e);
+        $("aiContent").innerHTML = `<p class="text-rose-600">Không gọi được /api/analyze. Kiểm tra OPENAI_API_KEY.</p>`;
+      }
+    }
+
+    /******************************
+     * 8) Pronunciation Assessment via /api/pronounce
+     ******************************/
+    async function assessPronunciation() {
+      const referenceText = ($("refTextBox").value || "").trim();
+      if (!referenceText) {
+        $("pronStatus").textContent = "Thiếu reference text. Dán câu mẫu vào ô Reference Text.";
+        return;
+      }
+      if (!lastAudioBlob) {
+        $("pronStatus").textContent = "Chưa có audio. Bấm Start Recording → đọc câu mẫu → Stop Recording.";
+        return;
+      }
+
+      $("pronStatus").textContent = "Đang chấm phát âm...";
+      $("pronSummary").textContent = "";
+      $("pronHighlight").innerHTML = `<span class="text-slate-500">(Đang xử lý...)</span>`;
+      $("pronWrongList").innerHTML = `<li>(Đang xử lý...)</li>`;
+
+      try {
+        const fd = new FormData();
+        fd.append("referenceText", referenceText);
+        fd.append("audio", lastAudioBlob, "speech.webm");
+
+        const r = await fetch("/api/pronounce", { method: "POST", body: fd });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.error || "Azure error");
+
+        renderPronunciation(referenceText, data);
+        $("pronStatus").textContent = "Đã chấm xong.";
+      } catch (e) {
+        $("pronStatus").textContent = "Lỗi chấm phát âm: " + (e?.message || e);
+        $("pronHighlight").innerHTML = `<span class="text-rose-600">Không gọi được /api/pronounce. Kiểm tra AZURE_SPEECH_KEY + AZURE_SPEECH_REGION.</span>`;
+        $("pronWrongList").innerHTML = `<li class="text-rose-600">Không có dữ liệu</li>`;
+      }
+    }
+
+    function renderPronunciation(referenceText, data) {
+      const overall = data.overall || {};
+      const words = data.words || [];
+
+      $("pronSummary").innerHTML = `
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="text-xs text-slate-500">Accuracy</div>
+            <div class="font-bold text-slate-900">${overall.accuracyScore ?? "?"}</div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="text-xs text-slate-500">Fluency</div>
+            <div class="font-bold text-slate-900">${overall.fluencyScore ?? "?"}</div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="text-xs text-slate-500">Completeness</div>
+            <div class="font-bold text-slate-900">${overall.completenessScore ?? "?"}</div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="text-xs text-slate-500">PronScore</div>
+            <div class="font-bold text-slate-900">${overall.pronScore ?? "?"}</div>
+          </div>
+        </div>
+      `;
+
+      const refTokens = referenceText.split(/\s+/).filter(Boolean);
+
+      // simple sequential alignment (best for read-aloud)
+      let wi = 0;
+      const highlighted = refTokens.map((tok) => {
+        const cleanTok = normalizeWord(tok);
+        if (!cleanTok) return `<sp
